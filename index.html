@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>kbproxy</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,'Segoe UI',monospace;background:#0f1923;color:#cdd6f4;padding:20px}
+h1{font-size:18px;margin-bottom:4px;color:#89b4fa}
+.subtitle{font-size:11px;color:#585b70;margin-bottom:16px}
+h2{font-size:14px;margin:20px 0 8px;color:#a6e3a1;cursor:pointer;user-select:none}
+h2:hover{color:#94e2d5}
+h2 .arrow{display:inline-block;width:14px;transition:transform .2s}
+h2.collapsed .arrow{transform:rotate(-90deg)}
+.tag{display:inline-block;padding:1px 6px;border-radius:3px;font-size:10px;background:#313244;color:#bac2de;margin-left:6px}
+.tag.active{background:#a6e3a1;color:#0f1923}
+.hint{font-size:10px;color:#585b70;margin-left:4px}
+.section{margin-bottom:8px}
+.backend-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-left:16px}
+.backend-block{background:#11111b;border-radius:4px;overflow:hidden}
+.backend-header{font-size:12px;color:#f9e2af;padding:4px 8px;cursor:pointer;user-select:none;background:#181825}
+.backend-header:hover{color:#f5c2e7}
+.backend-header .arrow{display:inline-block;width:12px;transition:transform .2s;font-size:10px}
+.backend-header.collapsed .arrow{transform:rotate(-90deg)}
+table{width:100%;border-collapse:collapse;font-size:11px}
+th,td{text-align:left;padding:3px 6px;border-bottom:1px solid #313244}
+th{color:#6c7086;font-weight:600;text-transform:uppercase;letter-spacing:.5px;font-size:10px}
+tr:hover td{background:#1e1e2e}
+.num{font-variant-numeric:tabular-nums}
+.bar-wrap{display:inline-block;width:60px;height:4px;background:#313244;border-radius:2px;vertical-align:middle;margin-left:3px}
+.bar-fill{height:100%;border-radius:2px;background:#89b4fa;transition:width .5s}
+.bar-fill.out{background:#f9e2af}
+.total-row td{font-weight:600;border-top:1px solid #45475a;font-size:11px}
+.empty{color:#585b70;font-size:12px;padding:8px}
+</style>
+</head>
+<body>
+<h1>kbproxy</h1>
+<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+<p class="subtitle" id="info" style="margin:0">Connecting...</p>
+<label style="cursor:pointer;font-size:11px;color:#585b70"><input type="checkbox" id="autoRefresh" checked onchange="toggleRefresh()"> Auto refresh</label>
+</div>
+<div id="content"></div>
+
+<script>
+const API_CONN = '/api/connections';
+const API_STATS = '/api/stats';
+let globalMaxRate = 1;
+let statsData = {frontends:[], backends:[]};
+
+function fmt(n) {
+  if (n >= 1073741824) return (n/1073741824).toFixed(1)+' GiB';
+  if (n >= 1048576) return (n/1048576).toFixed(1)+' MiB';
+  if (n >= 1024) return (n/1024).toFixed(1)+' KiB';
+  return n.toFixed(0)+' B';
+}
+function fmtRate(n) {
+  if (n >= 1073741824) return (n/1073741824).toFixed(1)+' GiB/s';
+  if (n >= 1048576) return (n/1048576).toFixed(1)+' MiB/s';
+  if (n >= 1024) return (n/1024).toFixed(1)+' KiB/s';
+  return n.toFixed(0)+' B/s';
+}
+function bar(rate) {
+  const pct = Math.min(100, rate/globalMaxRate*100);
+  return '<div class="bar-wrap"><div class="bar-fill" style="width:'+pct+'%"></div></div>';
+}
+function barOut(rate) {
+  const pct = Math.min(100, rate/globalMaxRate*100);
+  return '<div class="bar-wrap"><div class="bar-fill out" style="width:'+pct+'%"></div></div>';
+}
+
+let collapsed = new Set();
+
+function toggleKey(type, id) { return type + '::' + id; }
+
+function toggle(e) {
+  const el = e.currentTarget;
+  const key = el.dataset.key;
+  if (collapsed.has(key)) {
+    collapsed.delete(key);
+  } else {
+    collapsed.add(key);
+  }
+  el.classList.toggle('collapsed');
+  const target = el.nextElementSibling;
+  if (target) target.style.display = collapsed.has(key) ? 'none' : '';
+}
+
+function findFeStat(listenAddr) {
+  return statsData.frontends.find(f => f.listen_addr === listenAddr) || {};
+}
+function findBeStat(addr) {
+  return statsData.backends.find(b => b.addr === addr) || {};
+}
+
+function buildBackendBlock(be, conns, beS) {
+  let beIn = 0, beOut = 0, beRateIn = 0, beRateOut = 0;
+  for (const c of conns) {
+    beIn += c.bytes_in; beOut += c.bytes_out;
+    beRateIn += c.rate_in; beRateOut += c.rate_out;
+  }
+  const beTotal = beS.total_conns || 0;
+  const bePeakConns = beS.peak_conns || 0;
+  const bePeakIn = beS.peak_rate_in || 0;
+  const bePeakOut = beS.peak_rate_out || 0;
+
+  const beKey = toggleKey('be', be);
+  const beCollapsed = collapsed.has(beKey);
+  let html = '<div class="backend-block">';
+  html += '<div class="backend-header'+(beCollapsed?' collapsed':'')+'" data-key="'+beKey+'" onclick="toggle(event)" title="total: '+beTotal+' | peak conns: '+bePeakConns+' | peak ↓: '+fmtRate(bePeakIn)+' | peak ↑: '+fmtRate(bePeakOut)+'"><span class="arrow">▼</span> '+be+' <span class="tag active">'+conns.length+' active</span> '+fmtRate(beRateIn)+'↓ '+fmtRate(beRateOut)+'↑</div>';
+  html += '<div style="'+(beCollapsed?'display:none':'')+'">';
+  html += '<table><thead><tr><th>ID</th><th>In</th><th>Out</th><th>In Rate</th><th>Out Rate</th><th>Alive</th></tr></thead><tbody>';
+  for (const c of conns) {
+    html += '<tr><td>'+c.id+'</td>';
+    html += '<td class="num">'+fmt(c.bytes_in)+'</td>';
+    html += '<td class="num">'+fmt(c.bytes_out)+'</td>';
+    html += '<td class="num">'+fmtRate(c.rate_in)+bar(c.rate_in)+'</td>';
+    html += '<td class="num">'+fmtRate(c.rate_out)+barOut(c.rate_out)+'</td>';
+    html += '<td>'+c.created_at+'</td></tr>';
+  }
+  html += '<tr class="total-row"><td>Total</td>';
+  html += '<td class="num">'+fmt(beIn)+'</td>';
+  html += '<td class="num">'+fmt(beOut)+'</td>';
+  html += '<td class="num">'+fmtRate(beRateIn)+'</td>';
+  html += '<td class="num">'+fmtRate(beRateOut)+'</td>';
+  html += '<td></td></tr>';
+  html += '</tbody></table></div></div>';
+  return html;
+}
+
+function buildFrontend(fe, backends) {
+  const feS = findFeStat(fe);
+  let feConns = 0, feIn = 0, feOut = 0, feRateIn = 0, feRateOut = 0;
+  const beKeys = Object.keys(backends).sort();
+  const beStats = [];
+  for (const be of beKeys) {
+    const conns = backends[be];
+    const beS = findBeStat(be);
+    beStats.push({be, conns, beS});
+    for (const c of conns) {
+      feConns++; feIn += c.bytes_in; feOut += c.bytes_out;
+      feRateIn += c.rate_in; feRateOut += c.rate_out;
+    }
+  }
+
+  const feTotal = feS.total_conns || 0;
+  const fePeakConns = feS.peak_conns || 0;
+  const fePeakIn = feS.peak_rate_in || 0;
+  const fePeakOut = feS.peak_rate_out || 0;
+
+  const feKey = toggleKey('fe', fe);
+  const feCollapsed = collapsed.has(feKey);
+
+  let html = '<div class="section">';
+  html += '<h2 class="'+(feCollapsed?'collapsed':'')+'" data-key="'+feKey+'" onclick="toggle(event)" title="total: '+feTotal+' | peak conns: '+fePeakConns+' | peak ↓: '+fmtRate(fePeakIn)+' | peak ↑: '+fmtRate(fePeakOut)+'"><span class="arrow">▼</span> Frontend: '+fe+' <span class="tag active">'+feConns+' active</span> '+fmtRate(feRateIn)+' ↓ '+fmtRate(feRateOut)+' ↑</h2>';
+  html += '<div class="backend-grid" style="'+(feCollapsed?'display:none':'')+'">';
+  for (const b of beStats) {
+    html += buildBackendBlock(b.be, b.conns, b.beS);
+  }
+  html += '</div></div>';
+  return html;
+}
+
+async function refresh() {
+  try {
+    const [connResp, statsResp] = await Promise.all([fetch(API_CONN), fetch(API_STATS)]);
+    const conns = await connResp.json();
+    statsData = await statsResp.json();
+
+    globalMaxRate = 1;
+    for (const c of conns) {
+      if (c.rate_in > globalMaxRate) globalMaxRate = c.rate_in;
+      if (c.rate_out > globalMaxRate) globalMaxRate = c.rate_out;
+    }
+    for (const f of statsData.frontends) {
+      if (f.peak_rate_in > globalMaxRate) globalMaxRate = f.peak_rate_in;
+      if (f.peak_rate_out > globalMaxRate) globalMaxRate = f.peak_rate_out;
+    }
+
+    const byFe = {};
+    for (const c of conns) {
+      if (!byFe[c.frontend]) byFe[c.frontend] = {};
+      if (!byFe[c.frontend][c.backend]) byFe[c.frontend][c.backend] = [];
+      byFe[c.frontend][c.backend].push(c);
+    }
+    for (const fe in byFe) {
+      for (const be in byFe[fe]) {
+        byFe[fe][be].sort((a, b) => a.id.localeCompare(b.id));
+      }
+    }
+
+    let html = '';
+    const feKeys = Object.keys(byFe).sort();
+    for (const fe of feKeys) {
+      html += buildFrontend(fe, byFe[fe]);
+    }
+    if (!html) html = '<p class="empty">No active connections</p>';
+
+    document.getElementById('content').innerHTML = html;
+    document.getElementById('info').textContent = conns.length + ' active connections | Refreshing every 1s';
+  } catch(e) {
+    document.getElementById('info').textContent = 'Connection error';
+  }
+}
+
+let refreshTimer = setInterval(refresh, 1000);
+
+function toggleRefresh() {
+  const on = document.getElementById('autoRefresh').checked;
+  if (on) {
+    refresh();
+    refreshTimer = setInterval(refresh, 1000);
+  } else {
+    clearInterval(refreshTimer);
+    refreshTimer = null;
+  }
+}
+
+refresh();
+</script>
+</body>
+</html>
