@@ -136,10 +136,12 @@ func main() {
 	var apiAddr string
 	var apiUser string
 	var apiPass string
+	var configPath string
 
 	flag.StringVar(&apiAddr, "api", ":9090", "API server listen address")
 	flag.StringVar(&apiUser, "api-user", "", "API Basic Auth username")
 	flag.StringVar(&apiPass, "api-pass", "", "API Basic Auth password")
+	flag.StringVar(&configPath, "config", "", "JSON config file path (enables hot reload)")
 
 	var frontendURLs multiFlag
 	var backendLists multiFlag
@@ -148,6 +150,49 @@ func main() {
 	flag.Var(&backendLists, "backend", "Comma-separated backend URLs: tcp://10.0.0.1:80,tcp://10.0.0.2:80")
 
 	flag.Parse()
+
+	if configPath != "" {
+		if len(frontendURLs) > 0 || len(backendLists) > 0 {
+			fmt.Fprintf(os.Stderr, "Error: -config cannot be used with -frontend or -backend\n")
+			os.Exit(1)
+		}
+
+		cf, err := loadConfigFile(configPath)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+		configs, err := configToProxyConfigs(cf)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+
+		proxy := NewProxy(configs, cf.API, cf.APIUser, cf.APIPass)
+		proxy.configPath = configPath
+		watchConfigFile(configPath, 5*time.Second, func() error {
+			cf, err := loadConfigFile(configPath)
+			if err != nil {
+				return err
+			}
+			configs, err := configToProxyConfigs(cf)
+			if err != nil {
+				return err
+			}
+			if cf.API != proxy.apiAddr {
+				fmt.Printf("[reload] WARNING: api address change (%s -> %s) requires restart, ignoring\n", proxy.apiAddr, cf.API)
+			}
+			proxy.apiUser = cf.APIUser
+			proxy.apiPass = cf.APIPass
+			proxy.ReloadConfig(configs)
+			return nil
+		})
+		if err := proxy.Start(); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
 
 	if len(frontendURLs) == 0 {
 		flag.Usage()
