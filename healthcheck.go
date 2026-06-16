@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"net"
@@ -35,9 +36,16 @@ func runCheck(bs *backendStats, script, host, port string, timeout time.Duration
 		"KBPROXY_BACKEND_HOST="+host,
 		"KBPROXY_BACKEND_PORT="+port,
 	)
+	var buf bytes.Buffer
+	cmd.Stdout = &buf
+	cmd.Stderr = &buf
 
 	err := cmd.Run()
 	wasHealthy := bs.healthy.Load()
+	output := buf.String()
+	if output != "" {
+		fmt.Printf("[health] %s: check output:\n%s", bs.addr, output)
+	}
 
 	if ctx.Err() == context.DeadlineExceeded {
 		if wasHealthy {
