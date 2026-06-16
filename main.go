@@ -62,8 +62,12 @@ func parseBackendURL(raw string) (BackendConfig, error) {
 	checkScript := u.Query().Get("check")
 
 	backup := false
-	if v := u.Query().Get("backup"); v != "" {
-		backup, _ = strconv.ParseBool(v)
+	if u.Query().Has("backup") {
+		if v := u.Query().Get("backup"); v != "" {
+			backup, _ = strconv.ParseBool(v)
+		} else {
+			backup = true
+		}
 	}
 
 	checkInterval := 60 * time.Second
