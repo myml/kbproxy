@@ -92,12 +92,13 @@ type frontendStat struct {
 }
 
 type backendStat struct {
-	Addr       string `json:"addr"`
-	Weight     int    `json:"weight"`
-	TotalConns int64  `json:"total_conns"`
-	PeakConns  int64  `json:"peak_conns"`
+	Addr        string `json:"addr"`
+	Weight      int    `json:"weight"`
+	TotalConns  int64  `json:"total_conns"`
+	PeakConns   int64  `json:"peak_conns"`
 	PeakRateIn  int64  `json:"peak_rate_in"`
 	PeakRateOut int64  `json:"peak_rate_out"`
+	Healthy     bool   `json:"healthy"`
 }
 
 func (p *Proxy) handleStats(w http.ResponseWriter, r *http.Request) {
@@ -123,6 +124,7 @@ func (p *Proxy) handleStats(w http.ResponseWriter, r *http.Request) {
 				PeakConns:   bs.peakConns.Load(),
 				PeakRateIn:  bs.peakRateIn.Load(),
 				PeakRateOut: bs.peakRateOut.Load(),
+				Healthy:     bs.healthy.Load(),
 			})
 		}
 	}
