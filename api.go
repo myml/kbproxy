@@ -21,11 +21,13 @@ func (p *Proxy) startAPI() error {
 		mux.HandleFunc("/api/connections", p.basicAuth(p.handleConnections))
 		mux.HandleFunc("/api/stats", p.basicAuth(p.handleStats))
 		mux.HandleFunc("/api/test", p.basicAuth(p.handleTest))
+		mux.HandleFunc("/api/reload", p.basicAuth(p.handleReload))
 	} else {
 		mux.HandleFunc("/", p.serveIndex)
 		mux.HandleFunc("/api/connections", p.handleConnections)
 		mux.HandleFunc("/api/stats", p.handleStats)
 		mux.HandleFunc("/api/test", p.handleTest)
+		mux.HandleFunc("/api/reload", p.handleReload)
 	}
 
 	return http.ListenAndServe(p.apiAddr, mux)
@@ -181,6 +183,38 @@ func (p *Proxy) handleTest(w http.ResponseWriter, r *http.Request) {
 			written += int64(len(buf))
 		}
 	}
+}
+
+func (p *Proxy) handleReload(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if p.configPath == "" {
+		http.Error(w, "Hot reload not enabled (use -config)", http.StatusBadRequest)
+		return
+	}
+
+	cf, err := loadConfigFile(p.configPath)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	configs, err := configToProxyConfigs(cf)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if cf.API != p.apiAddr {
+		fmt.Printf("[reload] WARNING: api address change requires restart, ignoring\n")
+	}
+	p.apiUser = cf.APIUser
+	p.apiPass = cf.APIPass
+	p.ReloadConfig(configs)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 }
 
 func fmtDuration(d time.Duration) string {
