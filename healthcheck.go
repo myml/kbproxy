@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"math/rand"
 	"net"
 	"os"
 	"os/exec"
@@ -18,6 +19,8 @@ func startHealthCheck(bs *backendStats, script string, interval, timeout time.Du
 	}
 
 	go func() {
+		jitter := time.Duration(rand.Int63n(int64(interval)))
+		time.Sleep(jitter)
 		runCheck(bs, script, host, port, timeout)
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
