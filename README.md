@@ -42,6 +42,7 @@ Flags:
   -api string        API server listen address (default ":9090")
   -api-user string   API Basic Auth username
   -api-pass string   API Basic Auth password
+  -config string     JSON config file path (enables hot reload)
 ```
 
 ### 基本示例
@@ -86,6 +87,43 @@ kbproxy \
 | `inter` | 检查间隔（秒），默认 60 |
 | `check_timeout` | 检查超时（秒），默认 5 |
 
+### 配置文件
+
+使用 JSON 配置文件代替命令行参数，支持热重载（修改文件后自动生效，无需重启）：
+
+```bash
+kbproxy -config kbproxy.json
+```
+
+配置文件格式：
+
+```json
+{
+  "api": ":9090",
+  "api_user": "",
+  "api_pass": "",
+  "frontends": [
+    {
+      "url": "tcp://:8080?lb=least_conn",
+      "backends": ["tcp://10.0.0.1:80?weight=3", "tcp://10.0.0.2:80?backup"]
+    }
+  ]
+}
+```
+
+`frontends[].url` 和 `backends[]` 的参数格式与命令行一致。
+
+**热重载：**
+
+- 修改配置文件后 5 秒内自动生效
+- 新增前端：立即开始监听
+- 移除前端：停止接受新连接，已有连接优雅等待关闭（最多 30 秒）
+- 后端增删改：即时生效，移除的后端不再接受新连接
+- API 地址变更不支持热重载，需重启
+- 也可通过 `POST /api/reload` 手动触发重载
+
+**注意：** `-config` 与 `-frontend`/`-backend` 互斥，不能同时使用。
+
 ### 后端权重
 
 ```bash
@@ -112,6 +150,7 @@ wget "http://localhost:9090/api/test?size=524288000"
 | `GET /api/connections` | 活跃连接列表 |
 | `GET /api/stats` | 前端/后端统计信息 |
 | `GET /api/test?size=N` | 带宽测试下载 |
+| `POST /api/reload` | 手动触发配置重载（需 -config 模式） |
 
 ## Dashboard
 
