@@ -154,11 +154,10 @@ func (sc *statsCollector) registerFrontend(id, listenAddr string, rateLimit int6
 	fs.rateLimit = rateLimit
 	for _, bc := range backendConfigs {
 		bs := newBackendStats(bc.Addr, bc.Weight, bc.Backup)
-		fs.backends = append(fs.backends, bs)
 		if bc.CheckScript != "" {
 			bs.checkInterval.Store(bc.CheckInterval.Milliseconds())
-			startHealthCheck(context.Background(), bs, bc.CheckScript, bc.CheckInterval, bc.CheckTimeout)
 		}
+		fs.backends = append(fs.backends, bs)
 	}
 	sc.frontends[id] = fs
 	return fs
