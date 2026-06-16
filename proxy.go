@@ -119,8 +119,8 @@ func (p *Proxy) handleConnection(clientConn net.Conn, cfg FrontendConfig, fs *fr
 	fmt.Printf("[proxy] %s: %s <-> %s via %s\n", connID, clientConn.RemoteAddr(), bs.addr, fs.listenAddr)
 
 	done := make(chan bool, 2)
-	go p.pipe(clientConn, backendConn, cs, &cs.bytesOut, &cs.samplingBytesOut, &cs.bs.bytesIn, &cs.fs.bytesIn, done)
-	go p.pipe(backendConn, clientConn, cs, &cs.bytesIn, &cs.samplingBytesIn, &cs.bs.bytesOut, &cs.fs.bytesOut, done)
+	go p.pipe(clientConn, backendConn, cs, &cs.bytesOut, &cs.samplingBytesOut, &cs.bs.bytesIn, &cs.fs.bytesIn, cfg.RateLimit, done)
+	go p.pipe(backendConn, clientConn, cs, &cs.bytesIn, &cs.samplingBytesIn, &cs.bs.bytesOut, &cs.fs.bytesOut, cfg.RateLimit, done)
 
 	<-done
 	clientConn.Close()
@@ -131,7 +131,7 @@ func (p *Proxy) handleConnection(clientConn net.Conn, cfg FrontendConfig, fs *fr
 	fmt.Printf("[proxy] %s: closed (in=%d out=%d)\n", connID, cs.bytesIn.Load(), cs.bytesOut.Load())
 }
 
-func (p *Proxy) pipe(dst io.Writer, src io.Reader, cs *connStats, connTotal, connSampling, backendTotal, frontendTotal *atomic.Int64, done chan bool) {
+func (p *Proxy) pipe(dst io.Writer, src io.Reader, cs *connStats, connTotal, connSampling, backendTotal, frontendTotal *atomic.Int64, rateLimit int64, done chan bool) {
 	defer func() {
 		if r := recover(); r != nil {
 			fmt.Printf("[proxy] panic in pipe: %v\n%s", r, debug.Stack())
@@ -139,6 +139,8 @@ func (p *Proxy) pipe(dst io.Writer, src io.Reader, cs *connStats, connTotal, con
 		}
 	}()
 	buf := make([]byte, 32*1024)
+	var byteCount int64
+	start := time.Now()
 	for {
 		n, err := src.Read(buf)
 		if n > 0 {
@@ -153,6 +155,14 @@ func (p *Proxy) pipe(dst io.Writer, src io.Reader, cs *connStats, connTotal, con
 			if _, werr := dst.Write(buf[:n]); werr != nil {
 				done <- true
 				return
+			}
+			if rateLimit > 0 {
+				byteCount += int64(n)
+				expected := time.Duration(byteCount * int64(time.Second) / rateLimit)
+				elapsed := time.Since(start)
+				if expected > elapsed {
+					time.Sleep(expected - elapsed)
+				}
 			}
 		}
 		if err != nil {
