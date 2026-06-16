@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 )
 
 type BackendConfig struct {
-	Addr string
+	Addr   string
+	Weight int
 }
 
 type FrontendConfig struct {
@@ -29,23 +31,30 @@ func parseFrontendURL(raw string) (FrontendConfig, error) {
 	}
 	lb := u.Query().Get("lb")
 	if lb == "" {
-		lb = "least_conn"
+		lb = "least_bandwidth"
 	}
 	return FrontendConfig{ListenAddr: host, LBStrategy: lb}, nil
 }
 
-func parseBackendURL(raw string) (string, error) {
+func parseBackendURL(raw string) (BackendConfig, error) {
 	if !strings.HasPrefix(raw, "tcp://") {
-		return "", fmt.Errorf("invalid backend URL %q: must start with tcp://", raw)
+		return BackendConfig{}, fmt.Errorf("invalid backend URL %q: must start with tcp://", raw)
 	}
 	u, err := url.Parse(raw)
 	if err != nil {
-		return "", fmt.Errorf("invalid backend URL %q: %w", raw, err)
+		return BackendConfig{}, fmt.Errorf("invalid backend URL %q: %w", raw, err)
 	}
 	if u.Host == "" {
-		return "", fmt.Errorf("invalid backend URL %q: missing host", raw)
+		return BackendConfig{}, fmt.Errorf("invalid backend URL %q: missing host", raw)
 	}
-	return u.Host, nil
+	weight := 1
+	if w := u.Query().Get("weight"); w != "" {
+		weight, err = strconv.Atoi(w)
+		if err != nil || weight <= 0 {
+			return BackendConfig{}, fmt.Errorf("invalid backend URL %q: weight must be a positive integer", raw)
+		}
+	}
+	return BackendConfig{Addr: u.Host, Weight: weight}, nil
 }
 
 func main() {
@@ -119,11 +128,11 @@ func parseBackends(s string) ([]BackendConfig, error) {
 		if p == "" {
 			continue
 		}
-		addr, err := parseBackendURL(p)
+		bc, err := parseBackendURL(p)
 		if err != nil {
 			return nil, err
 		}
-		backends = append(backends, BackendConfig{Addr: addr})
+		backends = append(backends, bc)
 	}
 	return backends, nil
 }

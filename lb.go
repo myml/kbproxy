@@ -11,10 +11,10 @@ func (leastConnectionsLB) Pick(backends []*backendStats) *backendStats {
 		return nil
 	}
 	selected := backends[0]
-	min := selected.activeConns.Load()
+	min := float64(selected.activeConns.Load()) / float64(selected.weight)
 	for _, b := range backends[1:] {
-		if n := b.activeConns.Load(); n < min {
-			min = n
+		if v := float64(b.activeConns.Load()) / float64(b.weight); v < min {
+			min = v
 			selected = b
 		}
 	}
@@ -28,10 +28,10 @@ func (leastBandwidthLB) Pick(backends []*backendStats) *backendStats {
 		return nil
 	}
 	selected := backends[0]
-	min := selected.rateOut.rate()
+	min := selected.rateOut.rate() / float64(selected.weight)
 	for _, b := range backends[1:] {
-		if r := b.rateOut.rate(); r < min {
-			min = r
+		if v := b.rateOut.rate() / float64(b.weight); v < min {
+			min = v
 			selected = b
 		}
 	}
@@ -40,11 +40,11 @@ func (leastBandwidthLB) Pick(backends []*backendStats) *backendStats {
 
 func newLoadBalancer(strategy string) loadBalancer {
 	switch strategy {
-	case "least_bandwidth":
-		return leastBandwidthLB{}
 	case "least_conn":
+		return leastConnectionsLB{}
+	case "least_bandwidth":
 		fallthrough
 	default:
-		return leastConnectionsLB{}
+		return leastBandwidthLB{}
 	}
 }

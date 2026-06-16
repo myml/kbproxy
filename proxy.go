@@ -36,11 +36,7 @@ func (p *Proxy) Start() error {
 
 	for i, cfg := range p.configs {
 		id := fmt.Sprintf("f-%d", i)
-		backendAddrs := make([]string, len(cfg.Backends))
-		for j, b := range cfg.Backends {
-			backendAddrs[j] = b.Addr
-		}
-		fs := p.stats.registerFrontend(id, cfg.ListenAddr, backendAddrs)
+		fs := p.stats.registerFrontend(id, cfg.ListenAddr, cfg.Backends)
 		p.lbCache[id] = newLoadBalancer(cfg.LBStrategy)
 
 		go p.listenFrontend(cfg, fs)

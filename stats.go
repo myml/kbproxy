@@ -77,6 +77,7 @@ func newConnStats(id string) *connStats {
 
 type backendStats struct {
 	addr        string
+	weight      int
 	bytesIn     atomic.Int64
 	bytesOut    atomic.Int64
 	rateIn      *slidingWindow
@@ -88,9 +89,10 @@ type backendStats struct {
 	peakRateOut atomic.Int64
 }
 
-func newBackendStats(addr string) *backendStats {
+func newBackendStats(addr string, weight int) *backendStats {
 	return &backendStats{
 		addr:    addr,
+		weight:  weight,
 		rateIn:  newSlidingWindow(),
 		rateOut: newSlidingWindow(),
 	}
@@ -133,12 +135,12 @@ func newStatsCollector() *statsCollector {
 	}
 }
 
-func (sc *statsCollector) registerFrontend(id, listenAddr string, backendAddrs []string) *frontendStats {
+func (sc *statsCollector) registerFrontend(id, listenAddr string, backendConfigs []BackendConfig) *frontendStats {
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
 	fs := newFrontendStats(id, listenAddr)
-	for _, addr := range backendAddrs {
-		fs.backends = append(fs.backends, newBackendStats(addr))
+	for _, bc := range backendConfigs {
+		fs.backends = append(fs.backends, newBackendStats(bc.Addr, bc.Weight))
 	}
 	sc.frontends[id] = fs
 	return fs

@@ -93,6 +93,7 @@ type frontendStat struct {
 
 type backendStat struct {
 	Addr       string `json:"addr"`
+	Weight     int    `json:"weight"`
 	TotalConns int64  `json:"total_conns"`
 	PeakConns  int64  `json:"peak_conns"`
 	PeakRateIn  int64  `json:"peak_rate_in"`
@@ -117,6 +118,7 @@ func (p *Proxy) handleStats(w http.ResponseWriter, r *http.Request) {
 		for _, bs := range fs.backends {
 			backends = append(backends, backendStat{
 				Addr:        bs.addr,
+				Weight:      bs.weight,
 				TotalConns:  bs.totalConns.Load(),
 				PeakConns:   bs.peakConns.Load(),
 				PeakRateIn:  bs.peakRateIn.Load(),
