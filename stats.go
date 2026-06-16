@@ -90,6 +90,7 @@ type backendStats struct {
 	peakRateIn     atomic.Int64
 	peakRateOut    atomic.Int64
 	healthy        atomic.Bool
+	draining       atomic.Bool
 	lastCheckTime  atomic.Int64
 	checkInterval  atomic.Int64
 	checkTotal     atomic.Int64
@@ -161,6 +162,79 @@ func (sc *statsCollector) registerFrontend(id, listenAddr string, rateLimit int6
 	}
 	sc.frontends[id] = fs
 	return fs
+}
+
+func (sc *statsCollector) unregisterFrontend(id string) {
+	sc.mu.Lock()
+	defer sc.mu.Unlock()
+	delete(sc.frontends, id)
+}
+
+func (sc *statsCollector) updateFrontendBackends(fs *frontendStats, backendConfigs []BackendConfig, cancelFuncs map[string]context.CancelFunc) map[string]context.CancelFunc {
+	sc.mu.Lock()
+	defer sc.mu.Unlock()
+
+	newCancelFuncs := make(map[string]context.CancelFunc)
+
+	existing := make(map[string]*backendStats)
+	for _, bs := range fs.backends {
+		existing[bs.addr] = bs
+	}
+
+	wanted := make(map[string]BackendConfig)
+	for _, bc := range backendConfigs {
+		wanted[bc.Addr] = bc
+	}
+
+	var newBackends []*backendStats
+	for _, bc := range backendConfigs {
+		if bs, ok := existing[bc.Addr]; ok {
+			bs.weight = bc.Weight
+			bs.backup = bc.Backup
+			if bc.CheckScript != "" {
+				bs.checkInterval.Store(bc.CheckInterval.Milliseconds())
+				if cancel, ok := cancelFuncs[bc.Addr]; ok {
+					newCancelFuncs[bc.Addr] = cancel
+				} else {
+					ctx, cancel := context.WithCancel(context.Background())
+					newCancelFuncs[bc.Addr] = cancel
+					startHealthCheck(ctx, bs, bc.CheckScript, bc.CheckInterval, bc.CheckTimeout)
+				}
+			} else {
+				if cancel, ok := cancelFuncs[bc.Addr]; ok {
+					cancel()
+					delete(cancelFuncs, bc.Addr)
+				}
+			}
+			bs.draining.Store(false)
+			newBackends = append(newBackends, bs)
+		} else {
+			bs := newBackendStats(bc.Addr, bc.Weight, bc.Backup)
+			if bc.CheckScript != "" {
+				bs.checkInterval.Store(bc.CheckInterval.Milliseconds())
+				ctx, cancel := context.WithCancel(context.Background())
+				newCancelFuncs[bc.Addr] = cancel
+				startHealthCheck(ctx, bs, bc.CheckScript, bc.CheckInterval, bc.CheckTimeout)
+			}
+			newBackends = append(newBackends, bs)
+		}
+	}
+
+	for addr, bs := range existing {
+		if _, ok := wanted[addr]; !ok {
+			bs.draining.Store(true)
+			if cancel, ok := cancelFuncs[addr]; ok {
+				cancel()
+			}
+			if bs.activeConns.Load() == 0 {
+				continue
+			}
+			newBackends = append(newBackends, bs)
+		}
+	}
+
+	fs.backends = newBackends
+	return newCancelFuncs
 }
 
 func (sc *statsCollector) registerConn(id string, fs *frontendStats, bs *backendStats) *connStats {
