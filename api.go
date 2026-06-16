@@ -89,6 +89,7 @@ func (p *Proxy) handleConnections(w http.ResponseWriter, r *http.Request) {
 type frontendStat struct {
 	ID          string        `json:"id"`
 	ListenAddr  string        `json:"listen_addr"`
+	RateLimit   int64         `json:"rate_limit"`
 	TotalConns  int64         `json:"total_conns"`
 	PeakConns   int64         `json:"peak_conns"`
 	PeakRateIn  int64         `json:"peak_rate_in"`
@@ -137,6 +138,7 @@ func (p *Proxy) handleStats(w http.ResponseWriter, r *http.Request) {
 		frontends = append(frontends, frontendStat{
 			ID:          fs.id,
 			ListenAddr:  fs.listenAddr,
+			RateLimit:   fs.rateLimit,
 			TotalConns:  fs.totalConns.Load(),
 			PeakConns:   fs.peakConns.Load(),
 			PeakRateIn:  fs.peakRateIn.Load(),

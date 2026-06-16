@@ -120,6 +120,7 @@ type frontendStats struct {
 	peakRateIn  atomic.Int64
 	peakRateOut atomic.Int64
 	backends    []*backendStats
+	rateLimit   int64
 }
 
 func newFrontendStats(id, listenAddr string) *frontendStats {
@@ -144,10 +145,11 @@ func newStatsCollector() *statsCollector {
 	}
 }
 
-func (sc *statsCollector) registerFrontend(id, listenAddr string, backendConfigs []BackendConfig) *frontendStats {
+func (sc *statsCollector) registerFrontend(id, listenAddr string, rateLimit int64, backendConfigs []BackendConfig) *frontendStats {
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
 	fs := newFrontendStats(id, listenAddr)
+	fs.rateLimit = rateLimit
 	for _, bc := range backendConfigs {
 		bs := newBackendStats(bc.Addr, bc.Weight, bc.Backup)
 		fs.backends = append(fs.backends, bs)
