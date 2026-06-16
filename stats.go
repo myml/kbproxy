@@ -87,15 +87,18 @@ type backendStats struct {
 	peakConns   atomic.Int64
 	peakRateIn  atomic.Int64
 	peakRateOut atomic.Int64
+	healthy     atomic.Bool
 }
 
 func newBackendStats(addr string, weight int) *backendStats {
-	return &backendStats{
+	bs := &backendStats{
 		addr:    addr,
 		weight:  weight,
 		rateIn:  newSlidingWindow(),
 		rateOut: newSlidingWindow(),
 	}
+	bs.healthy.Store(true)
+	return bs
 }
 
 type frontendStats struct {
