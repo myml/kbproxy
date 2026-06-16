@@ -102,6 +102,8 @@ type backendStat struct {
 	Healthy        bool   `json:"healthy"`
 	LastCheckTime  int64  `json:"last_check_time"`
 	CheckInterval  int64  `json:"check_interval"`
+	CheckTotal     int64  `json:"check_total"`
+	CheckSuccess   int64  `json:"check_success"`
 }
 
 func (p *Proxy) handleStats(w http.ResponseWriter, r *http.Request) {
@@ -122,6 +124,8 @@ func (p *Proxy) handleStats(w http.ResponseWriter, r *http.Request) {
 				Healthy:       bs.healthy.Load(),
 				LastCheckTime: bs.lastCheckTime.Load(),
 				CheckInterval: bs.checkInterval.Load(),
+				CheckTotal:    bs.checkTotal.Load(),
+				CheckSuccess:  bs.checkSuccess.Load(),
 			})
 		}
 		frontends = append(frontends, frontendStat{

@@ -90,6 +90,8 @@ type backendStats struct {
 	healthy        atomic.Bool
 	lastCheckTime  atomic.Int64
 	checkInterval  atomic.Int64
+	checkTotal     atomic.Int64
+	checkSuccess   atomic.Int64
 }
 
 func newBackendStats(addr string, weight int) *backendStats {

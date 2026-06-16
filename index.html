@@ -112,7 +112,8 @@ function buildBackendBlock(be, conns, beS) {
   if (beS.last_check_time) {
     const last = new Date(beS.last_check_time);
     const next = new Date(beS.last_check_time + beS.check_interval);
-    healthTitle = '上次检查: '+last.toLocaleTimeString()+' | 下次检查: '+next.toLocaleTimeString();
+    const ratio = (beS.check_success||0)+'/'+(beS.check_total||0);
+    healthTitle = '检查: '+ratio+' | 上次: '+last.toLocaleTimeString()+' | 下次: '+next.toLocaleTimeString();
   }
   const healthTag = healthy
     ? '<span class="tag active" title="'+healthTitle+'">UP</span>'
