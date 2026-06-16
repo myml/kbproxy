@@ -143,7 +143,11 @@ func (sc *statsCollector) registerFrontend(id, listenAddr string, backendConfigs
 	defer sc.mu.Unlock()
 	fs := newFrontendStats(id, listenAddr)
 	for _, bc := range backendConfigs {
-		fs.backends = append(fs.backends, newBackendStats(bc.Addr, bc.Weight))
+		bs := newBackendStats(bc.Addr, bc.Weight)
+		fs.backends = append(fs.backends, bs)
+		if bc.CheckScript != "" {
+			startHealthCheck(bs, bc.CheckScript, bc.CheckInterval, bc.CheckTimeout)
+		}
 	}
 	sc.frontends[id] = fs
 	return fs
