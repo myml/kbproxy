@@ -18,6 +18,7 @@ h2.collapsed .arrow{transform:rotate(-90deg)}
 .hint{font-size:10px;color:#585b70;margin-left:4px}
 .section{margin-bottom:8px}
 .backend-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-left:16px}
+@media(max-width:640px){.backend-grid{grid-template-columns:1fr}}
 .backend-block{background:#11111b;border-radius:4px;overflow:hidden}
 .backend-header{font-size:12px;color:#f9e2af;padding:4px 8px;cursor:pointer;user-select:none;background:#181825}
 .backend-header:hover{color:#f5c2e7}
@@ -47,7 +48,7 @@ tr:hover td{background:#1e1e2e}
 const API_CONN = '/api/connections';
 const API_STATS = '/api/stats';
 let globalMaxRate = 1;
-let statsData = {frontends:[], backends:[]};
+let statsData = {frontends:[]};
 
 function fmt(n) {
   if (n >= 1073741824) return (n/1073741824).toFixed(1)+' GiB';
@@ -87,11 +88,9 @@ function toggle(e) {
   if (target) target.style.display = collapsed.has(key) ? 'none' : '';
 }
 
-function findFeStat(listenAddr) {
-  return statsData.frontends.find(f => f.listen_addr === listenAddr) || {};
-}
-function findBeStat(addr) {
-  return statsData.backends.find(b => b.addr === addr) || {};
+function findBeStat(feStat, addr) {
+  if (!feStat.backends) return {};
+  return feStat.backends.find(b => b.addr === addr) || {};
 }
 
 function buildBackendBlock(be, conns, beS) {
@@ -131,19 +130,19 @@ function buildBackendBlock(be, conns, beS) {
   return html;
 }
 
-function buildFrontend(fe, backends) {
-  const feS = findFeStat(fe);
+function buildFrontend(feS, connsByBe) {
+  const fe = feS.listen_addr;
   let feConns = 0, feIn = 0, feOut = 0, feRateIn = 0, feRateOut = 0;
-  const beKeys = Object.keys(backends).sort();
   const beStats = [];
-  for (const be of beKeys) {
-    const conns = backends[be];
-    const beS = findBeStat(be);
-    beStats.push({be, conns, beS});
+  const allBackends = feS.backends || [];
+  for (const beS of allBackends) {
+    const conns = connsByBe[beS.addr] || [];
+    beStats.push({be: beS.addr, conns, beS});
     for (const c of conns) {
       feConns++; feIn += c.bytes_in; feOut += c.bytes_out;
       feRateIn += c.rate_in; feRateOut += c.rate_out;
     }
+  }
   }
 
   const feTotal = feS.total_conns || 0;
@@ -180,22 +179,22 @@ async function refresh() {
       if (f.peak_rate_out > globalMaxRate) globalMaxRate = f.peak_rate_out;
     }
 
-    const byFe = {};
+    const connsByFe = {};
     for (const c of conns) {
-      if (!byFe[c.frontend]) byFe[c.frontend] = {};
-      if (!byFe[c.frontend][c.backend]) byFe[c.frontend][c.backend] = [];
-      byFe[c.frontend][c.backend].push(c);
+      if (!connsByFe[c.frontend]) connsByFe[c.frontend] = {};
+      if (!connsByFe[c.frontend][c.backend]) connsByFe[c.frontend][c.backend] = [];
+      connsByFe[c.frontend][c.backend].push(c);
     }
-    for (const fe in byFe) {
-      for (const be in byFe[fe]) {
-        byFe[fe][be].sort((a, b) => a.id.localeCompare(b.id));
+    for (const fe in connsByFe) {
+      for (const be in connsByFe[fe]) {
+        connsByFe[fe][be].sort((a, b) => a.id.localeCompare(b.id));
       }
     }
 
     let html = '';
-    const feKeys = Object.keys(byFe).sort();
-    for (const fe of feKeys) {
-      html += buildFrontend(fe, byFe[fe]);
+    for (const feS of statsData.frontends) {
+      const connsByBe = connsByFe[feS.listen_addr] || {};
+      html += buildFrontend(feS, connsByBe);
     }
     if (!html) html = '<p class="empty">No active connections</p>';
 

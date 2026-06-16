@@ -83,12 +83,13 @@ func (p *Proxy) handleConnections(w http.ResponseWriter, r *http.Request) {
 }
 
 type frontendStat struct {
-	ID         string `json:"id"`
-	ListenAddr string `json:"listen_addr"`
-	TotalConns int64  `json:"total_conns"`
-	PeakConns  int64  `json:"peak_conns"`
-	PeakRateIn  int64  `json:"peak_rate_in"`
-	PeakRateOut int64  `json:"peak_rate_out"`
+	ID          string        `json:"id"`
+	ListenAddr  string        `json:"listen_addr"`
+	TotalConns  int64         `json:"total_conns"`
+	PeakConns   int64         `json:"peak_conns"`
+	PeakRateIn  int64         `json:"peak_rate_in"`
+	PeakRateOut int64         `json:"peak_rate_out"`
+	Backends    []backendStat `json:"backends"`
 }
 
 type backendStat struct {
@@ -106,18 +107,10 @@ func (p *Proxy) handleStats(w http.ResponseWriter, r *http.Request) {
 
 	p.stats.mu.Lock()
 	frontends := make([]frontendStat, 0, len(p.stats.frontends))
-	backends := make([]backendStat, 0)
 	for _, fs := range p.stats.frontends {
-		frontends = append(frontends, frontendStat{
-			ID:          fs.id,
-			ListenAddr:  fs.listenAddr,
-			TotalConns:  fs.totalConns.Load(),
-			PeakConns:   fs.peakConns.Load(),
-			PeakRateIn:  fs.peakRateIn.Load(),
-			PeakRateOut: fs.peakRateOut.Load(),
-		})
+		var beList []backendStat
 		for _, bs := range fs.backends {
-			backends = append(backends, backendStat{
+			beList = append(beList, backendStat{
 				Addr:        bs.addr,
 				Weight:      bs.weight,
 				TotalConns:  bs.totalConns.Load(),
@@ -127,12 +120,20 @@ func (p *Proxy) handleStats(w http.ResponseWriter, r *http.Request) {
 				Healthy:     bs.healthy.Load(),
 			})
 		}
+		frontends = append(frontends, frontendStat{
+			ID:          fs.id,
+			ListenAddr:  fs.listenAddr,
+			TotalConns:  fs.totalConns.Load(),
+			PeakConns:   fs.peakConns.Load(),
+			PeakRateIn:  fs.peakRateIn.Load(),
+			PeakRateOut: fs.peakRateOut.Load(),
+			Backends:    beList,
+		})
 	}
 	p.stats.mu.Unlock()
 
 	json.NewEncoder(w).Encode(map[string]any{
 		"frontends": frontends,
-		"backends":  backends,
 	})
 }
 
