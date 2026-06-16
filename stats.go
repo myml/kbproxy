@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -155,7 +156,7 @@ func (sc *statsCollector) registerFrontend(id, listenAddr string, rateLimit int6
 		fs.backends = append(fs.backends, bs)
 		if bc.CheckScript != "" {
 			bs.checkInterval.Store(bc.CheckInterval.Milliseconds())
-			startHealthCheck(bs, bc.CheckScript, bc.CheckInterval, bc.CheckTimeout)
+			startHealthCheck(context.Background(), bs, bc.CheckScript, bc.CheckInterval, bc.CheckTimeout)
 		}
 	}
 	sc.frontends[id] = fs

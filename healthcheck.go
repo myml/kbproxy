@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-func startHealthCheck(bs *backendStats, script string, interval, timeout time.Duration) {
+func startHealthCheck(ctx context.Context, bs *backendStats, script string, interval, timeout time.Duration) {
 	host, port, err := net.SplitHostPort(bs.addr)
 	if err != nil {
 		fmt.Printf("[health] ERROR: cannot parse backend addr %q: %v\n", bs.addr, err)
@@ -20,13 +20,22 @@ func startHealthCheck(bs *backendStats, script string, interval, timeout time.Du
 
 	go func() {
 		jitter := time.Duration(rand.Int63n(int64(interval)))
-		time.Sleep(jitter)
+		select {
+		case <-time.After(jitter):
+		case <-ctx.Done():
+			return
+		}
 		runCheck(bs, script, host, port, timeout)
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 
-		for range ticker.C {
-			runCheck(bs, script, host, port, timeout)
+		for {
+			select {
+			case <-ticker.C:
+				runCheck(bs, script, host, port, timeout)
+			case <-ctx.Done():
+				return
+			}
 		}
 	}()
 }
