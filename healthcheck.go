@@ -18,6 +18,7 @@ func startHealthCheck(bs *backendStats, script string, interval, timeout time.Du
 	}
 
 	go func() {
+		runCheck(bs, script, host, port, timeout)
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 
