@@ -74,7 +74,20 @@ func (p *Proxy) handleConnection(clientConn net.Conn, cfg FrontendConfig, fs *fr
 	}()
 
 	lb := p.lbCache[fs.id]
-	bs := lb.Pick(fs.backends)
+
+	healthyBackends := make([]*backendStats, 0, len(fs.backends))
+	for _, b := range fs.backends {
+		if b.healthy.Load() {
+			healthyBackends = append(healthyBackends, b)
+		}
+	}
+
+	pickBackends := healthyBackends
+	if len(pickBackends) == 0 {
+		pickBackends = fs.backends
+	}
+
+	bs := lb.Pick(pickBackends)
 	if bs == nil {
 		fmt.Printf("[proxy] no backends available for %s\n", fs.id)
 		return
