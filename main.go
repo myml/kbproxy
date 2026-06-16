@@ -13,6 +13,7 @@ import (
 type BackendConfig struct {
 	Addr          string
 	Weight        int
+	Backup        bool
 	CheckScript   string
 	CheckInterval time.Duration
 	CheckTimeout  time.Duration
@@ -60,6 +61,11 @@ func parseBackendURL(raw string) (BackendConfig, error) {
 	}
 	checkScript := u.Query().Get("check")
 
+	backup := false
+	if v := u.Query().Get("backup"); v != "" {
+		backup, _ = strconv.ParseBool(v)
+	}
+
 	checkInterval := 60 * time.Second
 	if v := u.Query().Get("inter"); v != "" {
 		secs, err := strconv.Atoi(v)
@@ -81,6 +87,7 @@ func parseBackendURL(raw string) (BackendConfig, error) {
 	return BackendConfig{
 		Addr:          u.Host,
 		Weight:        weight,
+		Backup:        backup,
 		CheckScript:   checkScript,
 		CheckInterval: checkInterval,
 		CheckTimeout:  checkTimeout,

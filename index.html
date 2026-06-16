@@ -112,13 +112,15 @@ function buildBackendBlock(be, conns, beS) {
   if (beS.last_check_time) {
     const last = new Date(beS.last_check_time);
     const next = new Date(beS.last_check_time + beS.check_interval);
+    const remain = Math.max(0, Math.round((next - Date.now()) / 1000));
     const ratio = (beS.check_success||0)+'/'+(beS.check_total||0);
-    healthInfo = ' <span class="hint">'+ratio+' | 上次 '+last.toLocaleTimeString()+' | 下次 '+next.toLocaleTimeString()+'</span>';
+    healthInfo = ' <span class="hint">'+ratio+' | 上次 '+last.toLocaleTimeString()+' ('+remain+'s)</span>';
   }
   const healthTag = healthy
     ? '<span class="tag active">UP</span>'
     : '<span class="tag" style="background:#f38ba8;color:#11111b">DOWN</span>';
-  html += '<div class="backend-header'+(beCollapsed?' collapsed':'')+'" data-key="'+beKey+'" onclick="toggle(event)" title="total: '+beTotal+' | peak conns: '+bePeakConns+' | peak ↓: '+fmtRate(bePeakIn)+' | peak ↑: '+fmtRate(bePeakOut)+'"><span class="arrow">▼</span> '+be+' '+healthTag+healthInfo+' <span class="tag active">'+conns.length+' active</span> '+fmtRate(beRateIn)+'↓ '+fmtRate(beRateOut)+'↑</div>';
+  const backupTag = beS.backup ? '<span class="tag" style="background:#fab387;color:#11111b">BACKUP</span>' : '';
+  html += '<div class="backend-header'+(beCollapsed?' collapsed':'')+'" data-key="'+beKey+'" onclick="toggle(event)" title="total: '+beTotal+' | peak conns: '+bePeakConns+' | peak ↓: '+fmtRate(bePeakIn)+' | peak ↑: '+fmtRate(bePeakOut)+'"><span class="arrow">▼</span> '+be+' '+healthTag+backupTag+healthInfo+' <span class="tag active">'+conns.length+' active</span> '+fmtRate(beRateIn)+'↓ '+fmtRate(beRateOut)+'↑</div>';
   html += '<div style="'+(beCollapsed?'display:none':'')+'">';
   html += '<table><thead><tr><th>ID</th><th>In</th><th>Out</th><th>In Rate</th><th>Out Rate</th><th>Alive</th></tr></thead><tbody>';
   for (const c of conns) {

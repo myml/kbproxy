@@ -78,6 +78,7 @@ func newConnStats(id string) *connStats {
 type backendStats struct {
 	addr           string
 	weight         int
+	backup         bool
 	bytesIn        atomic.Int64
 	bytesOut       atomic.Int64
 	rateIn         *slidingWindow
@@ -94,10 +95,11 @@ type backendStats struct {
 	checkSuccess   atomic.Int64
 }
 
-func newBackendStats(addr string, weight int) *backendStats {
+func newBackendStats(addr string, weight int, backup bool) *backendStats {
 	bs := &backendStats{
 		addr:    addr,
 		weight:  weight,
+		backup:  backup,
 		rateIn:  newSlidingWindow(),
 		rateOut: newSlidingWindow(),
 	}
@@ -147,7 +149,7 @@ func (sc *statsCollector) registerFrontend(id, listenAddr string, backendConfigs
 	defer sc.mu.Unlock()
 	fs := newFrontendStats(id, listenAddr)
 	for _, bc := range backendConfigs {
-		bs := newBackendStats(bc.Addr, bc.Weight)
+		bs := newBackendStats(bc.Addr, bc.Weight, bc.Backup)
 		fs.backends = append(fs.backends, bs)
 		if bc.CheckScript != "" {
 			bs.checkInterval.Store(bc.CheckInterval.Milliseconds())

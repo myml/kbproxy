@@ -75,23 +75,29 @@ func (p *Proxy) handleConnection(clientConn net.Conn, cfg FrontendConfig, fs *fr
 
 	lb := p.lbCache[fs.id]
 
-	healthyBackends := make([]*backendStats, 0, len(fs.backends))
+	var primary []*backendStats
+	var backup []*backendStats
 	for _, b := range fs.backends {
-		if b.healthy.Load() {
-			healthyBackends = append(healthyBackends, b)
+		if !b.healthy.Load() {
+			continue
+		}
+		if b.backup {
+			backup = append(backup, b)
+		} else {
+			primary = append(primary, b)
 		}
 	}
 
-	pickBackends := healthyBackends
+	pickBackends := primary
 	if len(pickBackends) == 0 {
-		pickBackends = fs.backends
+		pickBackends = backup
 	}
-
-	bs := lb.Pick(pickBackends)
-	if bs == nil {
+	if len(pickBackends) == 0 {
 		fmt.Printf("[proxy] no backends available for %s\n", fs.id)
 		return
 	}
+
+	bs := lb.Pick(pickBackends)
 
 	bs.activeConns.Add(1)
 	fs.activeConns.Add(1)
