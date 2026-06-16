@@ -7,11 +7,15 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type BackendConfig struct {
-	Addr   string
-	Weight int
+	Addr          string
+	Weight        int
+	CheckScript   string
+	CheckInterval time.Duration
+	CheckTimeout  time.Duration
 }
 
 type FrontendConfig struct {
@@ -54,7 +58,33 @@ func parseBackendURL(raw string) (BackendConfig, error) {
 			return BackendConfig{}, fmt.Errorf("invalid backend URL %q: weight must be a positive integer", raw)
 		}
 	}
-	return BackendConfig{Addr: u.Host, Weight: weight}, nil
+	checkScript := u.Query().Get("check")
+
+	checkInterval := 60 * time.Second
+	if v := u.Query().Get("inter"); v != "" {
+		secs, err := strconv.Atoi(v)
+		if err != nil || secs <= 0 {
+			return BackendConfig{}, fmt.Errorf("invalid backend URL %q: inter must be a positive integer", raw)
+		}
+		checkInterval = time.Duration(secs) * time.Second
+	}
+
+	checkTimeout := 5 * time.Second
+	if v := u.Query().Get("check_timeout"); v != "" {
+		secs, err := strconv.Atoi(v)
+		if err != nil || secs <= 0 {
+			return BackendConfig{}, fmt.Errorf("invalid backend URL %q: check_timeout must be a positive integer", raw)
+		}
+		checkTimeout = time.Duration(secs) * time.Second
+	}
+
+	return BackendConfig{
+		Addr:          u.Host,
+		Weight:        weight,
+		CheckScript:   checkScript,
+		CheckInterval: checkInterval,
+		CheckTimeout:  checkTimeout,
+	}, nil
 }
 
 func main() {
