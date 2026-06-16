@@ -158,7 +158,7 @@ func (p *Proxy) pipe(dst io.Writer, src io.Reader, cs *connStats, connTotal, con
 			}
 			if rateLimit > 0 {
 				byteCount += int64(n)
-				expected := time.Duration(byteCount * int64(time.Second) / rateLimit)
+				expected := time.Duration(float64(byteCount) / float64(rateLimit) * float64(time.Second))
 				elapsed := time.Since(start)
 				if expected > elapsed {
 					time.Sleep(expected - elapsed)
