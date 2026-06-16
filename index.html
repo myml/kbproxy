@@ -108,17 +108,17 @@ function buildBackendBlock(be, conns, beS) {
   const beCollapsed = collapsed.has(beKey);
   let html = '<div class="backend-block">';
   const healthy = beS.healthy !== undefined ? beS.healthy : true;
-  let healthTitle = '';
+  let healthInfo = '';
   if (beS.last_check_time) {
     const last = new Date(beS.last_check_time);
     const next = new Date(beS.last_check_time + beS.check_interval);
     const ratio = (beS.check_success||0)+'/'+(beS.check_total||0);
-    healthTitle = '检查: '+ratio+' | 上次: '+last.toLocaleTimeString()+' | 下次: '+next.toLocaleTimeString();
+    healthInfo = ' <span class="hint">'+ratio+' | 上次 '+last.toLocaleTimeString()+' | 下次 '+next.toLocaleTimeString()+'</span>';
   }
   const healthTag = healthy
-    ? '<span class="tag active" title="'+healthTitle+'">UP</span>'
-    : '<span class="tag" style="background:#f38ba8;color:#11111b" title="'+healthTitle+'">DOWN</span>';
-  html += '<div class="backend-header'+(beCollapsed?' collapsed':'')+'" data-key="'+beKey+'" onclick="toggle(event)" title="total: '+beTotal+' | peak conns: '+bePeakConns+' | peak ↓: '+fmtRate(bePeakIn)+' | peak ↑: '+fmtRate(bePeakOut)+'"><span class="arrow">▼</span> '+be+' '+healthTag+' <span class="tag active">'+conns.length+' active</span> '+fmtRate(beRateIn)+'↓ '+fmtRate(beRateOut)+'↑</div>';
+    ? '<span class="tag active">UP</span>'
+    : '<span class="tag" style="background:#f38ba8;color:#11111b">DOWN</span>';
+  html += '<div class="backend-header'+(beCollapsed?' collapsed':'')+'" data-key="'+beKey+'" onclick="toggle(event)" title="total: '+beTotal+' | peak conns: '+bePeakConns+' | peak ↓: '+fmtRate(bePeakIn)+' | peak ↑: '+fmtRate(bePeakOut)+'"><span class="arrow">▼</span> '+be+' '+healthTag+healthInfo+' <span class="tag active">'+conns.length+' active</span> '+fmtRate(beRateIn)+'↓ '+fmtRate(beRateOut)+'↑</div>';
   html += '<div style="'+(beCollapsed?'display:none':'')+'">';
   html += '<table><thead><tr><th>ID</th><th>In</th><th>Out</th><th>In Rate</th><th>Out Rate</th><th>Alive</th></tr></thead><tbody>';
   for (const c of conns) {
