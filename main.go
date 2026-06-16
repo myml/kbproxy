@@ -23,6 +23,7 @@ type FrontendConfig struct {
 	ListenAddr string
 	Backends   []BackendConfig
 	LBStrategy string
+	RateLimit  int64
 }
 
 func parseFrontendURL(raw string) (FrontendConfig, error) {
@@ -38,7 +39,11 @@ func parseFrontendURL(raw string) (FrontendConfig, error) {
 	if lb == "" {
 		lb = "least_bandwidth"
 	}
-	return FrontendConfig{ListenAddr: host, LBStrategy: lb}, nil
+	rateLimit, err := parseRateLimit(u.Query().Get("rate_limit"))
+	if err != nil {
+		return FrontendConfig{}, fmt.Errorf("invalid frontend URL %q: %w", raw, err)
+	}
+	return FrontendConfig{ListenAddr: host, LBStrategy: lb, RateLimit: rateLimit}, nil
 }
 
 func parseBackendURL(raw string) (BackendConfig, error) {
@@ -96,6 +101,30 @@ func parseBackendURL(raw string) (BackendConfig, error) {
 		CheckInterval: checkInterval,
 		CheckTimeout:  checkTimeout,
 	}, nil
+}
+
+func parseRateLimit(s string) (int64, error) {
+	if s == "" {
+		return 0, nil
+	}
+	s = strings.TrimSpace(strings.ToLower(s))
+	multiplier := int64(1)
+	switch {
+	case strings.HasSuffix(s, "g"):
+		multiplier = 1024 * 1024 * 1024
+		s = s[:len(s)-1]
+	case strings.HasSuffix(s, "m"):
+		multiplier = 1024 * 1024
+		s = s[:len(s)-1]
+	case strings.HasSuffix(s, "k"):
+		multiplier = 1024
+		s = s[:len(s)-1]
+	}
+	v, err := strconv.ParseInt(s, 10, 64)
+	if err != nil || v <= 0 {
+		return 0, fmt.Errorf("invalid rate_limit %q: must be a positive number with optional k/m/g suffix", s)
+	}
+	return v * multiplier, nil
 }
 
 func main() {
