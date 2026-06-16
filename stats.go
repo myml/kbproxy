@@ -76,18 +76,20 @@ func newConnStats(id string) *connStats {
 }
 
 type backendStats struct {
-	addr        string
-	weight      int
-	bytesIn     atomic.Int64
-	bytesOut    atomic.Int64
-	rateIn      *slidingWindow
-	rateOut     *slidingWindow
-	activeConns atomic.Int64
-	totalConns  atomic.Int64
-	peakConns   atomic.Int64
-	peakRateIn  atomic.Int64
-	peakRateOut atomic.Int64
-	healthy     atomic.Bool
+	addr           string
+	weight         int
+	bytesIn        atomic.Int64
+	bytesOut       atomic.Int64
+	rateIn         *slidingWindow
+	rateOut        *slidingWindow
+	activeConns    atomic.Int64
+	totalConns     atomic.Int64
+	peakConns      atomic.Int64
+	peakRateIn     atomic.Int64
+	peakRateOut    atomic.Int64
+	healthy        atomic.Bool
+	lastCheckTime  atomic.Int64
+	checkInterval  atomic.Int64
 }
 
 func newBackendStats(addr string, weight int) *backendStats {
@@ -146,6 +148,7 @@ func (sc *statsCollector) registerFrontend(id, listenAddr string, backendConfigs
 		bs := newBackendStats(bc.Addr, bc.Weight)
 		fs.backends = append(fs.backends, bs)
 		if bc.CheckScript != "" {
+			bs.checkInterval.Store(bc.CheckInterval.Milliseconds())
 			startHealthCheck(bs, bc.CheckScript, bc.CheckInterval, bc.CheckTimeout)
 		}
 	}

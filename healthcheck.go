@@ -42,6 +42,7 @@ func runCheck(bs *backendStats, script, host, port string, timeout time.Duration
 
 	err := cmd.Run()
 	wasHealthy := bs.healthy.Load()
+	bs.lastCheckTime.Store(time.Now().UnixMilli())
 	output := buf.String()
 	if output != "" {
 		fmt.Printf("[health] %s: check output:\n%s", bs.addr, output)
