@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"sort"
+	"strconv"
 	"time"
 )
 
@@ -19,10 +20,12 @@ func (p *Proxy) startAPI() error {
 		mux.HandleFunc("/", p.basicAuth(p.serveIndex))
 		mux.HandleFunc("/api/connections", p.basicAuth(p.handleConnections))
 		mux.HandleFunc("/api/stats", p.basicAuth(p.handleStats))
+		mux.HandleFunc("/api/test", p.basicAuth(p.handleTest))
 	} else {
 		mux.HandleFunc("/", p.serveIndex)
 		mux.HandleFunc("/api/connections", p.handleConnections)
 		mux.HandleFunc("/api/stats", p.handleStats)
+		mux.HandleFunc("/api/test", p.handleTest)
 	}
 
 	return http.ListenAndServe(p.apiAddr, mux)
@@ -149,6 +152,33 @@ func (p *Proxy) handleStats(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]any{
 		"frontends": frontends,
 	})
+}
+
+func (p *Proxy) handleTest(w http.ResponseWriter, r *http.Request) {
+	size := int64(100 * 1024 * 1024)
+	if v := r.URL.Query().Get("size"); v != "" {
+		if n, err := strconv.ParseInt(v, 10, 64); err == nil && n > 0 {
+			size = n
+		}
+	}
+	w.Header().Set("Content-Type", "application/octet-stream")
+	w.Header().Set("Content-Length", strconv.FormatInt(size, 10))
+	w.Header().Set("Content-Disposition", "attachment; filename=test")
+	buf := make([]byte, 32*1024)
+	for i := range buf {
+		buf[i] = byte(i % 256)
+	}
+	var written int64
+	for written < size {
+		remain := size - written
+		if int64(len(buf)) > remain {
+			w.Write(buf[:remain])
+			written = size
+		} else {
+			w.Write(buf)
+			written += int64(len(buf))
+		}
+	}
 }
 
 func fmtDuration(d time.Duration) string {
