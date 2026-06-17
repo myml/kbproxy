@@ -40,7 +40,12 @@ tr:hover td{background:#1e1e2e}
 <h1>kbproxy</h1>
 <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
 <p class="subtitle" id="info" style="margin:0">Connecting...</p>
-<label style="cursor:pointer;font-size:11px;color:#585b70"><input type="checkbox" id="autoRefresh" checked onchange="toggleRefresh()"> Auto refresh</label>
+<select id="refreshInterval" onchange="changeRefresh()" style="font-size:11px;color:#585b70;background:#181825;border:1px solid #313244;border-radius:3px;padding:1px 4px;cursor:pointer">
+<option value="1000" selected>1s</option>
+<option value="5000">5s</option>
+<option value="10000">10s</option>
+<option value="0">off</option>
+</select>
 </div>
 <div id="content"></div>
 
@@ -217,15 +222,18 @@ async function refresh() {
 
 let refreshTimer = setInterval(refresh, 1000);
 
-function toggleRefresh() {
-  const on = document.getElementById('autoRefresh').checked;
-  if (on) {
+function changeRefresh() {
+  const ms = parseInt(document.getElementById('refreshInterval').value);
+  if (refreshTimer) clearInterval(refreshTimer);
+  if (ms > 0) {
     refresh();
-    refreshTimer = setInterval(refresh, 1000);
+    refreshTimer = setInterval(refresh, ms);
   } else {
-    clearInterval(refreshTimer);
     refreshTimer = null;
   }
+  const infoEl = document.getElementById('info');
+  const base = infoEl.textContent.split('|')[0].trim();
+  infoEl.textContent = base + ' | ' + (ms > 0 ? 'Refreshing every ' + (ms/1000) + 's' : 'Auto refresh off');
 }
 
 refresh();
