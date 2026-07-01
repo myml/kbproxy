@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	_ "net/http/pprof"
+	"os"
 	"sort"
 	"strconv"
 	"time"
@@ -30,6 +32,9 @@ func (p *Proxy) startAPI() error {
 		mux.HandleFunc("/api/reload", p.handleReload)
 	}
 
+	if addr := os.Getenv("PPROF_ADDR"); addr != "" {
+		go http.ListenAndServe(addr, nil)
+	}
 	return http.ListenAndServe(p.apiAddr, mux)
 }
 
